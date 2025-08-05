@@ -1,1 +1,0 @@
-self.__REACT_LOADABLE_MANIFEST="{\"src/components/PrismaSchemaEditor.tsx -> @monaco-editor/react\":{\"id\":\"src/components/PrismaSchemaEditor.tsx -> @monaco-editor/react\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_pnpm_monaco-editor_react_4_7_0_monaco-editor_0_52_2_react-dom-78c222.js\"]}}"

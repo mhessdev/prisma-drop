@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Database, RefreshCw, PaintBucket, Loader2, Zap } from "lucide-react";
+import { Database, RefreshCw, PaintBucket, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -34,85 +34,14 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
   const [isPushing, setIsPushing] = useState(false);
   const [lastPush, setLastPush] = useState<Date | null>(null);
   const [isMounted, setIsMounted] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [cachedSuggestions, setCachedSuggestions] = useState<any[]>([]);
-  const fetchingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const { toast } = useToast();
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // AI Completion functions
-  const generateAICompletion = async (textBeforeCursor: string, currentLine: string): Promise<string> => {
-    try {
-      const response = await fetch('/api/ai-completion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          textBeforeCursor,
-          currentLine,
-          language: 'prisma'
-        })
-      });
 
-      if (response.ok) {
-        const { completion } = await response.json();
-        return completion || '';
-      }
-    } catch (error) {
-      console.error('AI completion error:', error);
-    }
-    return '';
-  };
-
-  const startOrResetAIFetching = (model: any, position: any) => {
-    if (!aiEnabled) return;
-
-    // Clear existing timers
-    if (fetchingIntervalRef.current) {
-      clearInterval(fetchingIntervalRef.current);
-      fetchingIntervalRef.current = null;
-    }
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-
-    // Start new timeout
-    timeoutRef.current = setTimeout(() => {
-      fetchingIntervalRef.current = setInterval(async () => {
-        const line = model.getLineContent(position.lineNumber);
-        const textBeforeCursor = model.getValueInRange({
-          startLineNumber: 1,
-          startColumn: 1,
-          endLineNumber: position.lineNumber,
-          endColumn: position.column
-        });
-
-        const completion = await generateAICompletion(textBeforeCursor, line);
-        
-        if (completion && completion.length > 0) {
-          const newSuggestion = {
-            insertText: completion,
-            range: {
-              startLineNumber: position.lineNumber,
-              endLineNumber: position.lineNumber,
-              startColumn: position.column,
-              endColumn: position.column
-            },
-            position: {
-              lineNumber: position.lineNumber,
-              column: position.column
-            }
-          };
-
-          setCachedSuggestions(prev => [newSuggestion, ...prev.slice(0, 7)]);
-        }
-      }, 2000); // Fetch every 2 seconds when idle
-    }, 1000); // Start after 1 second of inactivity
-  };
 
   // Helper function to determine if we're inside a specific block
   const isInsideBlock = (linesBefore: string[], currentLine: string, blockType: string): boolean => {
@@ -566,51 +495,7 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
       }
     });
 
-    // AI Inline Completion Provider
-    const aiInlineProvider = monaco.languages.registerInlineCompletionsProvider('prisma', {
-      provideInlineCompletions: async (model: any, position: any) => {
-        if (!aiEnabled || cachedSuggestions.length === 0) {
-          return { items: [] };
-        }
 
-        const word = model.getWordUntilPosition(position);
-        const line = model.getLineContent(position.lineNumber);
-        
-        // Filter relevant suggestions
-        const relevantSuggestions = cachedSuggestions.filter(suggestion => {
-          const isNearby = Math.abs(suggestion.position.lineNumber - position.lineNumber) <= 3;
-          const hasContent = suggestion.insertText.trim().length > 0;
-          return isNearby && hasContent;
-        });
-
-        if (relevantSuggestions.length === 0) {
-          return { items: [] };
-        }
-
-        const suggestion = relevantSuggestions[0];
-        
-        return {
-          items: [
-            {
-              insertText: suggestion.insertText,
-              range: new monaco.Range(
-                position.lineNumber,
-                position.column,
-                position.lineNumber,
-                position.column
-              ),
-              command: {
-                id: 'ai-completion-accepted',
-                title: 'AI Completion Accepted'
-              }
-            }
-          ]
-        };
-      },
-      freeInlineCompletions: (completions: any) => {
-        // Cleanup if needed
-      }
-    });
 
     // Enhanced hover provider
     const hoverProvider = monaco.languages.registerHoverProvider('prisma', {
@@ -696,15 +581,7 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
       },
     });
 
-    // Add change listener for AI completion
-    editor.onDidChangeModelContent(() => {
-      if (aiEnabled) {
-        const position = editor.getPosition();
-        if (position) {
-          startOrResetAIFetching(editor.getModel(), position);
-        }
-      }
-    });
+
 
     // Add Prisma-specific commands
     editor.addAction({
@@ -847,41 +724,7 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
           <span className="text-xs mt-1">{isFormatting ? "..." : "Format"}</span>
         </Button>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setAiEnabled(!aiEnabled);
-            if (!aiEnabled) {
-              toast({
-                title: "AI Completion enabled",
-                description: "Start typing to get AI-powered suggestions",
-              });
-            } else {
-              // Clear timers when disabling
-              if (fetchingIntervalRef.current) {
-                clearInterval(fetchingIntervalRef.current);
-                fetchingIntervalRef.current = null;
-              }
-              if (timeoutRef.current) {
-                clearTimeout(timeoutRef.current);
-                timeoutRef.current = null;
-              }
-              setCachedSuggestions([]);
-              toast({
-                title: "AI Completion disabled",
-                description: "AI suggestions are now turned off",
-              });
-            }
-          }}
-          className={`w-12 h-12 p-0 flex flex-col items-center justify-center text-gray-300 hover:text-white hover:bg-gray-700 ${
-            aiEnabled ? 'bg-purple-900/50 text-purple-300' : ''
-          }`}
-          title={aiEnabled ? "Disable AI completion" : "Enable AI completion"}
-        >
-          <Zap className={`h-4 w-4 ${aiEnabled ? 'text-purple-400' : ''}`} />
-          <span className="text-xs mt-1">AI</span>
-        </Button>
+
 
         {lastPush && (
           <div className="mt-4 flex flex-col items-center">
@@ -972,8 +815,8 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
               linkedEditing: true,
               codeLens: true,
               inlineSuggest: {
-                enabled: true,
-                showToolbar: 'onHover',
+                enabled: false,
+                showToolbar: 'never',
               },
             }}
           />
