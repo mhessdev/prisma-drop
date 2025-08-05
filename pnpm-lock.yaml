@@ -11,6 +11,9 @@ dependencies:
   '@monaco-editor/react':
     specifier: ^4.7.0
     version: 4.7.0(monaco-editor@0.52.2)(react-dom@18.3.1)(react@18.3.1)
+  '@prisma/client':
+    specifier: ^6.13.0
+    version: 6.13.0(prisma@6.13.0)(typescript@5.8.2)
   '@prisma/language-server':
     specifier: ^6.13.0
     version: 6.13.0
@@ -134,6 +137,9 @@ dependencies:
   next:
     specifier: ^15.4.5
     version: 15.4.5(react-dom@18.3.1)(react@18.3.1)
+  prisma:
+    specifier: ^6.13.0
+    version: 6.13.0(typescript@5.8.2)
   react:
     specifier: ^18.3.1
     version: 18.3.1
@@ -1519,6 +1525,23 @@ packages:
     requiresBuild: true
     optional: true
 
+  /@prisma/client@6.13.0(prisma@6.13.0)(typescript@5.8.2):
+    resolution: {integrity: sha512-8m2+I3dQovkV8CkDMluiwEV1TxV9EXdT6xaCz39O6jYw7mkf5gwfmi+cL4LJsEPwz5tG7sreBwkRpEMJedGYUQ==}
+    engines: {node: '>=18.18'}
+    requiresBuild: true
+    peerDependencies:
+      prisma: '*'
+      typescript: '>=5.1.0'
+    peerDependenciesMeta:
+      prisma:
+        optional: true
+      typescript:
+        optional: true
+    dependencies:
+      prisma: 6.13.0(typescript@5.8.2)
+      typescript: 5.8.2
+    dev: false
+
   /@prisma/config@6.13.0:
     resolution: {integrity: sha512-OYMM+pcrvj/NqNWCGESSxVG3O7kX6oWuGyvufTUNnDw740KIQvNyA4v0eILgkpuwsKIDU36beZCkUtIt0naTog==}
     dependencies:
@@ -1528,6 +1551,38 @@ packages:
       read-package-up: 11.0.0
     transitivePeerDependencies:
       - magicast
+    dev: false
+
+  /@prisma/debug@6.13.0:
+    resolution: {integrity: sha512-um+9pfKJW0ihmM83id9FXGi5qEbVJ0Vxi1Gm0xpYsjwUBnw6s2LdPBbrsG9QXRX46K4CLWCTNvskXBup4i9hlw==}
+    dev: false
+
+  /@prisma/engines-version@6.13.0-35.361e86d0ea4987e9f53a565309b3eed797a6bcbd:
+    resolution: {integrity: sha512-MpPyKSzBX7P/ZY9odp9TSegnS/yH3CSbchQE9f0yBg3l2QyN59I6vGXcoYcqKC9VTniS1s18AMmhyr1OWavjHg==}
+    dev: false
+
+  /@prisma/engines@6.13.0:
+    resolution: {integrity: sha512-D+1B79LFvtWA0KTt8ALekQ6A/glB9w10ETknH5Y9g1k2NYYQOQy93ffiuqLn3Pl6IPJG3EsK/YMROKEaq8KBrA==}
+    requiresBuild: true
+    dependencies:
+      '@prisma/debug': 6.13.0
+      '@prisma/engines-version': 6.13.0-35.361e86d0ea4987e9f53a565309b3eed797a6bcbd
+      '@prisma/fetch-engine': 6.13.0
+      '@prisma/get-platform': 6.13.0
+    dev: false
+
+  /@prisma/fetch-engine@6.13.0:
+    resolution: {integrity: sha512-grmmq+4FeFKmaaytA8Ozc2+Tf3BC8xn/DVJos6LL022mfRlMZYjT3hZM0/xG7+5fO95zFG9CkDUs0m1S2rXs5Q==}
+    dependencies:
+      '@prisma/debug': 6.13.0
+      '@prisma/engines-version': 6.13.0-35.361e86d0ea4987e9f53a565309b3eed797a6bcbd
+      '@prisma/get-platform': 6.13.0
+    dev: false
+
+  /@prisma/get-platform@6.13.0:
+    resolution: {integrity: sha512-Nii2pX50fY4QKKxQwm7/vvqT6Ku8yYJLZAFX4e2vzHwRdMqjugcOG5hOSLjxqoXb0cvOspV70TOhMzrw8kqAnw==}
+    dependencies:
+      '@prisma/debug': 6.13.0
     dev: false
 
   /@prisma/language-server@6.13.0:
@@ -5403,6 +5458,24 @@ packages:
   /prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
     engines: {node: '>= 0.8.0'}
+    dev: false
+
+  /prisma@6.13.0(typescript@5.8.2):
+    resolution: {integrity: sha512-dfzORf0AbcEyyzxuv2lEwG8g+WRGF/qDQTpHf/6JoHsyF5MyzCEZwClVaEmw3WXcobgadosOboKUgQU0kFs9kw==}
+    engines: {node: '>=18.18'}
+    hasBin: true
+    requiresBuild: true
+    peerDependencies:
+      typescript: '>=5.1.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+    dependencies:
+      '@prisma/config': 6.13.0
+      '@prisma/engines': 6.13.0
+      typescript: 5.8.2
+    transitivePeerDependencies:
+      - magicast
     dev: false
 
   /prop-types@15.8.1:

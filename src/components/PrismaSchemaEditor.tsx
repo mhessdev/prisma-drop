@@ -183,9 +183,9 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
 
     monaco.editor.setTheme('prisma-dark');
 
-    // Comprehensive completion provider for Prisma schema
+    // Enhanced completion provider for Prisma schema (like VSCode extension)
     const completionProvider = monaco.languages.registerCompletionItemProvider('prisma', {
-      triggerCharacters: ['@', '=', '"'],
+      triggerCharacters: ['@', '=', '"', ' ', '\n', '{'],
       provideCompletionItems: (model: any, position: any) => {
         const word = model.getWordUntilPosition(position);
         const range = {
@@ -197,298 +197,296 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
 
         const line = model.getLineContent(position.lineNumber);
         const beforeCursor = line.substring(0, position.column - 1);
+        const afterCursor = line.substring(position.column - 1);
         const allText = model.getValue();
         const linesBefore = allText.split('\n').slice(0, position.lineNumber - 1);
         
-        // Determine context
+        // Enhanced context detection
         const isInGenerator = isInsideBlock(linesBefore, line, 'generator');
         const isInDatasource = isInsideBlock(linesBefore, line, 'datasource');
         const isInModel = isInsideBlock(linesBefore, line, 'model');
         const isInEnum = isInsideBlock(linesBefore, line, 'enum');
         const isAfterAt = beforeCursor.trim().endsWith('@');
-        const isFieldType = isInModel && !isAfterAt && /^\s+\w+\s*$/.test(beforeCursor);
+        const isFieldDeclaration = isInModel && /^\s+[a-zA-Z_][a-zA-Z0-9_]*\s*$/.test(beforeCursor);
+        const isFieldType = isInModel && /^\s+[a-zA-Z_][a-zA-Z0-9_]*\s+$/.test(beforeCursor);
         const isPropertyValue = /=\s*$/.test(beforeCursor);
+        const isAfterSpace = beforeCursor.endsWith(' ');
+        const isNewLine = beforeCursor.trim() === '';
+        const isInsideParens = beforeCursor.includes('(') && !beforeCursor.includes(')');
 
         let suggestions: any[] = [];
 
-        // Block-level suggestions (only at top level)
-        if (!isInGenerator && !isInDatasource && !isInModel && !isInEnum && 
-            /^\s*(gen|mod|dat|enu|$)/.test(line)) {
+        // Top-level block suggestions
+        if (!isInGenerator && !isInDatasource && !isInModel && !isInEnum) {
+          if (isNewLine || /^\s*(gen|mod|dat|enu|typ|vie)/.test(line)) {
+            suggestions.push(
+              {
+                label: 'generator',
+                kind: monaco.languages.CompletionItemKind.Class,
+                insertText: [
+                  'generator ${1:client} {',
+                  '  provider = "prisma-client-js"',
+                  '  $0',
+                  '}'
+                ].join('\n'),
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'Define a code generator',
+                range,
+                sortText: '1'
+              },
+              {
+                label: 'model',
+                kind: monaco.languages.CompletionItemKind.Class,
+                insertText: [
+                  'model ${1:User} {',
+                  '  id    Int     @id @default(autoincrement())',
+                  '  email String  @unique',
+                  '  name  String?',
+                  '  $0',
+                  '}'
+                ].join('\n'),
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'Define a data model',
+                range,
+                sortText: '2'
+              },
+              {
+                label: 'datasource',
+                kind: monaco.languages.CompletionItemKind.Module,
+                insertText: [
+                  'datasource ${1:db} {',
+                  '  provider = "${2:postgresql}"',
+                  '  url      = env("${3:DATABASE_URL}")',
+                  '  $0',
+                  '}'
+                ].join('\n'),
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'Define a datasource',
+                range,
+                sortText: '3'
+              },
+              {
+                label: 'enum',
+                kind: monaco.languages.CompletionItemKind.Enum,
+                insertText: [
+                  'enum ${1:Role} {',
+                  '  ${2:USER}',
+                  '  ${3:ADMIN}',
+                  '  $0',
+                  '}'
+                ].join('\n'),
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                documentation: 'Define an enumeration',
+                range,
+                sortText: '4'
+              }
+            );
+          }
+        }
+
+        // Model field suggestions
+        if (isInModel && isNewLine) {
           suggestions.push(
             {
-              label: 'generator',
-              kind: monaco.languages.CompletionItemKind.Class,
-              insertText: [
-                'generator ${1:client} {',
-                '  provider = "prisma-client-js"',
-                '  $0',
-                '}'
-              ].join('\n'),
+              label: 'id',
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: 'id    ${1|Int,String|} @id @default(${2|autoincrement(),cuid(),uuid()|})',
               insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Define a generator',
+              documentation: 'Primary key field',
               range,
-              sortText: '1generator'
+              sortText: '1'
             },
             {
-              label: 'model',
-              kind: monaco.languages.CompletionItemKind.Class,
-              insertText: [
-                'model ${1:User} {',
-                '  id        String   @id @default(cuid())',
-                '  email     String   @unique',
-                '  name      String?',
-                '  createdAt DateTime @default(now())',
-                '  updatedAt DateTime @updatedAt',
-                '  $0',
-                '}'
-              ].join('\n'),
+              label: 'field',
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: '${1:fieldName} ${2|String,Int,Boolean,DateTime,Float,Decimal,Json,Bytes|} ${3:@unique}',
               insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Create a new data model',
+              documentation: 'Basic field',
               range,
-              sortText: '1model'
+              sortText: '2'
             },
             {
-              label: 'datasource',
-              kind: monaco.languages.CompletionItemKind.Module,
-              insertText: [
-                'datasource ${1:db} {',
-                '  provider = "${2:postgresql}"',
-                '  url      = env("${3:DATABASE_URL}")',
-                '  $0',
-                '}'
-              ].join('\n'),
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Define a datasource',
+              label: 'createdAt',
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: 'createdAt DateTime @default(now())',
+              documentation: 'Creation timestamp field',
               range,
-              sortText: '1datasource'
+              sortText: '3'
             },
             {
-              label: 'enum',
-              kind: monaco.languages.CompletionItemKind.Enum,
-              insertText: [
-                'enum ${1:Status} {',
-                '  ${2:ACTIVE}',
-                '  ${3:INACTIVE}',
-                '  $0',
-                '}'
-              ].join('\n'),
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Create an enumeration',
+              label: 'updatedAt',
+              kind: monaco.languages.CompletionItemKind.Snippet,
+              insertText: 'updatedAt DateTime @updatedAt',
+              documentation: 'Update timestamp field',
               range,
-              sortText: '1enum'
+              sortText: '4'
             }
           );
         }
 
+        // Field types
+        if (isFieldType) {
+          const fieldTypes = [
+            { name: 'String', desc: 'Variable length text' },
+            { name: 'Boolean', desc: 'True or false value' },
+            { name: 'Int', desc: '32-bit signed integer' },
+            { name: 'BigInt', desc: '64-bit signed integer' },
+            { name: 'Float', desc: 'Floating point number' },
+            { name: 'Decimal', desc: 'High precision decimal' },
+            { name: 'DateTime', desc: 'Timestamp' },
+            { name: 'Json', desc: 'JSON object' },
+            { name: 'Bytes', desc: 'Binary data' },
+            { name: 'String?', desc: 'Optional string' },
+            { name: 'Int?', desc: 'Optional integer' },
+            { name: 'Boolean?', desc: 'Optional boolean' },
+            { name: 'DateTime?', desc: 'Optional timestamp' },
+            { name: 'String[]', desc: 'Array of strings' },
+            { name: 'Int[]', desc: 'Array of integers' }
+          ];
+
+          suggestions.push(
+            ...fieldTypes.map(type => ({
+              label: type.name,
+              kind: monaco.languages.CompletionItemKind.TypeParameter,
+              insertText: type.name,
+              documentation: type.desc,
+              range,
+              sortText: type.name.includes('?') ? '2' : type.name.includes('[]') ? '3' : '1'
+            }))
+          );
+        }
+
+        // Attributes and functions
+        if (isAfterAt) {
+          const attributes = [
+            { name: 'id', snippet: 'id', desc: 'Defines the primary key' },
+            { name: 'unique', snippet: 'unique', desc: 'Defines a unique constraint' },
+            { name: 'default', snippet: 'default(${1:value})', desc: 'Sets a default value' },
+            { name: 'relation', snippet: 'relation(fields: [${1:fieldName}], references: [${2:id}])', desc: 'Defines a relation' },
+            { name: 'updatedAt', snippet: 'updatedAt', desc: 'Auto-updates timestamp' },
+            { name: 'map', snippet: 'map("${1:column_name}")', desc: 'Maps to database column' },
+            { name: 'db', snippet: 'db.${1:VarChar(255)}', desc: 'Database-specific attribute' },
+            { name: 'ignore', snippet: 'ignore', desc: 'Excludes field from client' }
+          ];
+
+          suggestions.push(
+            ...attributes.map(attr => ({
+              label: `@${attr.name}`,
+              kind: monaco.languages.CompletionItemKind.Property,
+              insertText: `@${attr.snippet}`,
+              insertTextRules: attr.snippet.includes('$') ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
+              documentation: attr.desc,
+              range,
+              sortText: '1'
+            }))
+          );
+        }
+
+        // Default value functions inside @default()
+        if (isInsideParens && beforeCursor.includes('@default(')) {
+          const functions = [
+            { name: 'autoincrement()', desc: 'Auto-incrementing integer' },
+            { name: 'cuid()', desc: 'Collision-resistant unique identifier' },
+            { name: 'uuid()', desc: 'UUID v4' },
+            { name: 'now()', desc: 'Current timestamp' },
+            { name: 'env("DATABASE_URL")', desc: 'Environment variable' },
+            { name: 'dbgenerated("expression")', desc: 'Database-generated value' }
+          ];
+
+          suggestions.push(
+            ...functions.map(func => ({
+              label: func.name,
+              kind: monaco.languages.CompletionItemKind.Function,
+              insertText: func.name,
+              documentation: func.desc,
+              range,
+              sortText: '1'
+            }))
+          );
+        }
+
         // Generator properties
-        if (isInGenerator && !isAfterAt) {
+        if (isInGenerator) {
           if (isPropertyValue) {
-            // Provider values
             if (beforeCursor.includes('provider')) {
               suggestions.push(
                 { label: '"prisma-client-js"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"prisma-client-js"', range },
-                { label: '"prisma-client"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"prisma-client"', range }
+                { label: '"prisma-client-py"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"prisma-client-py"', range }
               );
-            }
-            // Engine type values
-            else if (beforeCursor.includes('engineType')) {
+            } else if (beforeCursor.includes('previewFeatures')) {
+              const features = ['relationJoins', 'fullTextSearch', 'postgresqlExtensions', 'views', 'multiSchema'];
               suggestions.push(
-                { label: '"library"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"library"', range },
-                { label: '"binary"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"binary"', range }
-              );
-            }
-            // Module format values
-            else if (beforeCursor.includes('moduleFormat')) {
-              suggestions.push(
-                { label: '"cjs"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"cjs"', range },
-                { label: '"esm"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"esm"', range }
+                ...features.map(feature => ({
+                  label: `"${feature}"`,
+                  kind: monaco.languages.CompletionItemKind.Value,
+                  insertText: `"${feature}"`,
+                  range
+                }))
               );
             }
           } else {
-            // Generator property names
+            const generatorProps = [
+              { name: 'provider', snippet: 'provider = "${1:prisma-client-js}"' },
+              { name: 'output', snippet: 'output = "${1:../generated/client}"' },
+              { name: 'previewFeatures', snippet: 'previewFeatures = [${1:"relationJoins"}]' },
+              { name: 'binaryTargets', snippet: 'binaryTargets = [${1:"native"}]' }
+            ];
+
             suggestions.push(
-              { label: 'provider', kind: monaco.languages.CompletionItemKind.Property, insertText: 'provider = ', range, sortText: '1provider' },
-              { label: 'output', kind: monaco.languages.CompletionItemKind.Property, insertText: 'output = "${1:./generated/client}"', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range, sortText: '2output' },
-              { label: 'previewFeatures', kind: monaco.languages.CompletionItemKind.Property, insertText: 'previewFeatures = [${1:"feature"}]', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range, sortText: '3previewFeatures' },
-              { label: 'engineType', kind: monaco.languages.CompletionItemKind.Property, insertText: 'engineType = "${1:library}"', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range, sortText: '4engineType' },
-              { label: 'binaryTargets', kind: monaco.languages.CompletionItemKind.Property, insertText: 'binaryTargets = [${1:"native"}]', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range, sortText: '5binaryTargets' },
-              { label: 'moduleFormat', kind: monaco.languages.CompletionItemKind.Property, insertText: 'moduleFormat = "${1:cjs}"', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range, sortText: '6moduleFormat' }
+              ...generatorProps.map(prop => ({
+                label: prop.name,
+                kind: monaco.languages.CompletionItemKind.Property,
+                insertText: prop.snippet,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                range
+              }))
             );
           }
         }
 
         // Datasource properties
-        if (isInDatasource && !isAfterAt) {
+        if (isInDatasource) {
           if (isPropertyValue) {
             if (beforeCursor.includes('provider')) {
+              const providers = ['postgresql', 'mysql', 'sqlite', 'sqlserver', 'mongodb', 'cockroachdb'];
               suggestions.push(
-                { label: '"postgresql"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"postgresql"', range },
-                { label: '"mysql"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"mysql"', range },
-                { label: '"sqlite"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"sqlite"', range },
-                { label: '"sqlserver"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"sqlserver"', range },
-                { label: '"mongodb"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"mongodb"', range },
-                { label: '"cockroachdb"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"cockroachdb"', range }
+                ...providers.map(provider => ({
+                  label: `"${provider}"`,
+                  kind: monaco.languages.CompletionItemKind.Value,
+                  insertText: `"${provider}"`,
+                  range
+                }))
               );
             }
           } else {
+            const datasourceProps = [
+              { name: 'provider', snippet: 'provider = "${1:postgresql}"' },
+              { name: 'url', snippet: 'url = env("${1:DATABASE_URL}")' },
+              { name: 'directUrl', snippet: 'directUrl = env("${1:DIRECT_URL}")' },
+              { name: 'shadowDatabaseUrl', snippet: 'shadowDatabaseUrl = env("${1:SHADOW_DATABASE_URL}")' }
+            ];
+
             suggestions.push(
-              { label: 'provider', kind: monaco.languages.CompletionItemKind.Property, insertText: 'provider = ', range },
-              { label: 'url', kind: monaco.languages.CompletionItemKind.Property, insertText: 'url = env("${1:DATABASE_URL}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range }
+              ...datasourceProps.map(prop => ({
+                label: prop.name,
+                kind: monaco.languages.CompletionItemKind.Property,
+                insertText: prop.snippet,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                range
+              }))
             );
           }
         }
 
-        // Field types in models
-        if (isFieldType) {
-          suggestions.push(
-            ...['String', 'Boolean', 'Int', 'BigInt', 'Float', 'Decimal', 'DateTime', 'Json', 'Bytes'].map(type => ({
-              label: type,
-              kind: monaco.languages.CompletionItemKind.TypeParameter,
-              insertText: type,
-              documentation: `${type} field type`,
-              range,
-              sortText: `1${type}`
-            }))
-          );
-        }
-
-        // Attributes (triggered by @)
-        if (isAfterAt || (isInModel && beforeCursor.trim().endsWith('@'))) {
-          suggestions.push(
-            // Field attributes
-            {
-              label: '@id',
-              kind: monaco.languages.CompletionItemKind.Property,
-              insertText: '@id',
-              documentation: 'Defines the primary key',
-              range,
-              sortText: '1@id'
-            },
-            {
-              label: '@unique',
-              kind: monaco.languages.CompletionItemKind.Property,
-              insertText: '@unique',
-              documentation: 'Defines a unique constraint',
-              range,
-              sortText: '1@unique'
-            },
-            {
-              label: '@default',
-              kind: monaco.languages.CompletionItemKind.Property,
-              insertText: '@default(${1:value})',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Sets a default value',
-              range,
-              sortText: '1@default'
-            },
-            {
-              label: '@relation',
-              kind: monaco.languages.CompletionItemKind.Property,
-              insertText: '@relation(fields: [${1:fieldName}], references: [${2:id}])',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Defines a relation between models',
-              range,
-              sortText: '1@relation'
-            },
-            {
-              label: '@updatedAt',
-              kind: monaco.languages.CompletionItemKind.Property,
-              insertText: '@updatedAt',
-              documentation: 'Automatically sets the field to now() when the record is updated',
-              range,
-              sortText: '1@updatedAt'
-            },
-            {
-              label: '@map',
-              kind: monaco.languages.CompletionItemKind.Property,
-              insertText: '@map("${1:column_name}")',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Maps the field to a specific database column',
-              range,
-              sortText: '1@map'
-            },
-
-            // Default value functions
-            {
-              label: 'autoincrement()',
-              kind: monaco.languages.CompletionItemKind.Function,
-              insertText: 'autoincrement()',
-              documentation: 'Creates a sequence of integers in the underlying database',
-              range,
-              sortText: '4autoincrement'
-            },
-            {
-              label: 'cuid()',
-              kind: monaco.languages.CompletionItemKind.Function,
-              insertText: 'cuid()',
-              documentation: 'Generates a globally unique identifier',
-              range,
-              sortText: '4cuid'
-            },
-            {
-              label: 'uuid()',
-              kind: monaco.languages.CompletionItemKind.Function,
-              insertText: 'uuid()',
-              documentation: 'Generates a globally unique identifier',
-              range,
-              sortText: '4uuid'
-            },
-            {
-              label: 'now()',
-              kind: monaco.languages.CompletionItemKind.Function,
-              insertText: 'now()',
-              documentation: 'Sets a timestamp of the time when a record is created',
-              range,
-              sortText: '4now'
-            },
-
-            // Common field snippets
-            {
-              label: 'id (Int autoincrement)',
-              kind: monaco.languages.CompletionItemKind.Snippet,
-              insertText: 'id ${1:Int} @id @default(autoincrement())',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Integer ID field with auto-increment',
-              range,
-              sortText: '5id-int'
-            },
-            {
-              label: 'id (String cuid)',
-              kind: monaco.languages.CompletionItemKind.Snippet,
-              insertText: 'id ${1:String} @id @default(cuid())',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'String ID field with CUID',
-              range,
-              sortText: '5id-string'
-            },
-            {
-              label: 'email field',
-              kind: monaco.languages.CompletionItemKind.Snippet,
-              insertText: 'email ${1:String} @unique',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Unique email field',
-              range,
-              sortText: '5email'
-            },
-            {
-              label: 'timestamps',
-              kind: monaco.languages.CompletionItemKind.Snippet,
-              insertText: 'createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Standard timestamp fields',
-              range,
-              sortText: '5timestamps'
-            },
-            {
-              label: 'relation field',
-              kind: monaco.languages.CompletionItemKind.Snippet,
-              insertText: '${1:author}   ${2:User} @relation(fields: [${3:authorId}], references: [${4:id}])\n  ${3:authorId} ${5:String}',
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              documentation: 'Relation field with foreign key',
-              range,
-              sortText: '5relation'
-            }
-          );
+        // Enum values
+        if (isInEnum && isNewLine) {
+          suggestions.push({
+            label: 'enum value',
+            kind: monaco.languages.CompletionItemKind.EnumMember,
+            insertText: '${1:VALUE}',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            range
+          });
         }
 
         return { suggestions };
