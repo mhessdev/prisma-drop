@@ -30,17 +30,23 @@ export async function POST(request: NextRequest) {
       await fs.writeFile(tempFile, schema, 'utf8');
       console.log('Schema written to temp file');
 
-      // Format using Prisma CLI
+      // Use prisma binary directly from node_modules
+      const prismaPath = join(process.cwd(), 'node_modules', '.bin', 'prisma');
+      
       const formattedSchema = await new Promise<string>((resolve, reject) => {
-        const command = `npx prisma format --schema="${tempFile}"`;
+        const command = `"${prismaPath}" format --schema="${tempFile}"`;
         console.log('Executing command:', command);
         
         exec(
           command,
           { 
             cwd: process.cwd(),
-            timeout: 10000, // 10 second timeout
-            env: { ...process.env, FORCE_COLOR: '0' } // Disable colors in output
+            timeout: 15000, // 15 second timeout
+            env: { 
+              ...process.env,
+              FORCE_COLOR: '0',
+              NODE_ENV: 'production' // Prevent prisma from trying to install
+            }
           },
           async (error, stdout, stderr) => {
             console.log('Command completed');
@@ -49,14 +55,11 @@ export async function POST(request: NextRequest) {
             
             if (error) {
               console.error('Prisma format error:', error);
-              console.error('Error code:', error.code);
-              console.error('Error signal:', error.signal);
               reject(error);
               return;
             }
 
             try {
-              // Read the formatted content
               const formatted = await fs.readFile(tempFile, 'utf8');
               console.log('Formatted schema length:', formatted.length);
               resolve(formatted);
