@@ -1600,14 +1600,14 @@ video {
 .bg-primary\/20 {
   background-color: hsl(var(--primary) / 0.2);
 }
+.bg-purple-900\/50 {
+  background-color: rgb(88 28 135 / 0.5);
+}
 .bg-secondary {
   background-color: hsl(var(--secondary));
 }
 .bg-transparent {
   background-color: transparent;
-}
-.bg-purple-900\/50 {
-  background-color: rgb(88 28 135 / 0.5);
 }
 .fill-current {
   fill: currentColor;
@@ -1835,13 +1835,6 @@ video {
 .text-primary-foreground {
   color: hsl(var(--primary-foreground));
 }
-.text-secondary-foreground {
-  color: hsl(var(--secondary-foreground));
-}
-.text-white {
-  --tw-text-opacity: 1;
-  color: rgb(255 255 255 / var(--tw-text-opacity));
-}
 .text-purple-300 {
   --tw-text-opacity: 1;
   color: rgb(216 180 254 / var(--tw-text-opacity));
@@ -1849,6 +1842,13 @@ video {
 .text-purple-400 {
   --tw-text-opacity: 1;
   color: rgb(192 132 252 / var(--tw-text-opacity));
+}
+.text-secondary-foreground {
+  color: hsl(var(--secondary-foreground));
+}
+.text-white {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity));
 }
 .underline-offset-4 {
   text-underline-offset: 4px;
