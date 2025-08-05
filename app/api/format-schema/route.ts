@@ -30,11 +30,63 @@ export async function POST(request: NextRequest) {
       await fs.writeFile(tempFile, schema, 'utf8');
       console.log('Schema written to temp file');
 
-      // Use prisma binary directly from node_modules
-      const prismaPath = join(process.cwd(), 'node_modules', '.bin', 'prisma');
+      // Debug: List available files
+      console.log('Current working directory:', process.cwd());
+      try {
+        const nodeModules = await fs.readdir(join(process.cwd(), 'node_modules'));
+        console.log('Available packages in node_modules:', nodeModules.slice(0, 10));
+        
+        if (nodeModules.includes('prisma')) {
+          const prismaDir = await fs.readdir(join(process.cwd(), 'node_modules', 'prisma'));
+          console.log('Contents of prisma package:', prismaDir);
+        }
+      } catch (e) {
+        console.log('Could not read node_modules:', e);
+      }
+
+      // Try different possible paths for Prisma binary
+      const possiblePrismaPaths = [
+        join(process.cwd(), 'node_modules', '.bin', 'prisma'),
+        join(process.cwd(), 'node_modules', 'prisma', 'build', 'index.js'),
+        'npx prisma', // Use npx as fallback
+        'prisma'
+      ];
+      
+      let prismaPath = null;
+      
+      // Check which path exists
+      for (const path of possiblePrismaPaths) {
+        try {
+          if (path.startsWith('npx') || path === 'prisma') {
+            // For npx and global commands, we can't check file existence
+            prismaPath = path;
+            console.log('Will try command:', path);
+            break;
+          } else {
+            await fs.access(path);
+            prismaPath = path;
+            console.log('Found Prisma at:', path);
+            break;
+          }
+        } catch {
+          console.log('Prisma not found at:', path);
+        }
+      }
+      
+      if (!prismaPath) {
+        prismaPath = 'npx prisma'; // Last resort fallback
+        console.log('Using fallback command:', prismaPath);
+      }
       
       const formattedSchema = await new Promise<string>((resolve, reject) => {
-        const command = `"${prismaPath}" format --schema="${tempFile}"`;
+        let command;
+        if (prismaPath.endsWith('.js')) {
+          command = `node "${prismaPath}" format --schema="${tempFile}"`;
+        } else if (prismaPath.startsWith('npx')) {
+          command = `${prismaPath} format --schema="${tempFile}"`;
+        } else {
+          command = `"${prismaPath}" format --schema="${tempFile}"`;
+        }
         console.log('Executing command:', command);
         
         exec(
