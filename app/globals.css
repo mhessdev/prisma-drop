@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+/* CSS Variables for Light and Dark themes */
+@layer base {
+  :root {
+    /* Light theme colors */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 221 83% 53%;
+    --radius: 0.5rem;
+
+    /* Prisma Brand Variables - Light */
+    --surface-primary: #ffffff;
+    --surface-secondary: #f7fafc;
+    --surface-brand-grey: #f7fafc;
+    --surface-brand-grey-strong: #edf2f7;
+    --surface-brand-light: #d9f9f6;
+    --main-font-color: #2d3748;
+    --primary-font-color: #2d3748;
+    --secondary-font-color: #4a5568;
+    --tertiary-font-color: #718096;
+    --disabled-font-color: #cbd5e0;
+    --border-color: #e2e8f0;
+    --teal-link-color: #16a394;
+    --indigo-link-color: #5a67d8;
+  }
+
+  .dark {
+    /* Dark theme colors */
+    --background: 215 28% 17%;
+    --foreground: 0 0% 95%;
+    --card: 215 28% 17%;
+    --card-foreground: 0 0% 95%;
+    --popover: 215 28% 17%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 215 27.9% 16.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 85.7% 97.3%;
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+    --ring: 216 12.2% 83.9%;
+
+    /* Prisma Brand Variables - Dark */
+    --surface-primary: #090a15;
+    --surface-secondary: #1a202c;
+    --surface-brand-grey: #161d2b;
+    --surface-brand-grey-strong: #2d3748;
+    --surface-brand-light: #0d3a38;
+    --main-font-color: #e2e8f0;
+    --primary-font-color: #f7fafc;
+    --secondary-font-color: #cbd5e0;
+    --tertiary-font-color: #a0aec0;
+    --disabled-font-color: #4a5568;
+    --border-color: #2d3748;
+    --teal-link-color: #71e8df;
+    --indigo-link-color: #7f9cf5;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Dark mode styles */
+.dark {
+  color-scheme: dark;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-gray-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600 rounded-md;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-500;
+}
+
+/* Monaco Editor Dark Theme */
+.monaco-editor .margin {
+  background-color: transparent !important;
+}
+
+.monaco-editor .monaco-editor-background {
+  background-color: var(--surface-secondary) !important;
+}
+
+/* Code highlighting for Prisma */
+.prisma-token.keyword {
+  color: #7f9cf5 !important;
+}
+
+.prisma-token.type {
+  color: #71e8df !important;
+}
+
+.prisma-token.string {
+  color: #92efe6 !important;
+}
+
+.prisma-token.comment {
+  color: #a0aec0 !important;
+  font-style: italic;
+}

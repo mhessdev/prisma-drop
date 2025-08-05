@@ -2,10 +2,10 @@
 module.exports = {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   prefix: "",
   theme: {
@@ -17,7 +17,46 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        'inter': ['Inter', 'sans-serif'],
+        'barlow': ['Barlow', 'sans-serif'],
+        'mono': ['JetBrains Mono', 'monospace'],
+      },
       colors: {
+        // Prisma Brand Colors
+        indigo: {
+          100: '#ebf4ff',
+          200: '#c3dafe',
+          300: '#a3bffa',
+          400: '#7f9cf5',
+          500: '#667eea',
+          600: '#5a67d8',
+          700: '#4c51bf',
+          800: '#434190',
+        },
+        teal: {
+          100: '#d9f9f6',
+          200: '#b7f4ee',
+          300: '#92efe6',
+          400: '#71e8df',
+          500: '#04c8bb',
+          600: '#16a394',
+          700: '#1b7367',
+          800: '#154f47',
+        },
+        gray: {
+          100: '#f7fafc',
+          200: '#edf2f7',
+          300: '#e2e8f0',
+          400: '#cbd5e0',
+          500: '#a0aec0',
+          600: '#718096',
+          700: '#4a5568',
+          800: '#2d3748',
+          900: '#1a202c',
+          1000: '#090a15',
+        },
+        // Shadcn UI Colors
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
