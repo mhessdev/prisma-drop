@@ -1,9 +1,110 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promises as fs } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { randomBytes } from 'crypto';
+
+// Simple Prisma schema formatter that works in serverless environments
+function formatPrismaSchema(schema: string): string {
+  const lines = schema.split('\n');
+  const formattedLines: string[] = [];
+  let indentLevel = 0;
+  
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i].trim();
+    
+    // Skip empty lines
+    if (!line) {
+      formattedLines.push('');
+      continue;
+    }
+    
+    // Handle closing braces
+    if (line === '}') {
+      indentLevel = Math.max(0, indentLevel - 1);
+      formattedLines.push('  '.repeat(indentLevel) + line);
+      continue;
+    }
+    
+    // Add current line with proper indentation
+    formattedLines.push('  '.repeat(indentLevel) + line);
+    
+    // Handle opening braces and increase indent
+    if (line.includes('{')) {
+      indentLevel++;
+    }
+  }
+  
+  // Format field alignment within models
+  const finalLines: string[] = [];
+  let inModel = false;
+  let modelLines: string[] = [];
+  
+  for (const line of formattedLines) {
+    const trimmed = line.trim();
+    
+    if (trimmed.startsWith('model ') && trimmed.includes('{')) {
+      inModel = true;
+      modelLines = [line];
+    } else if (inModel && trimmed === '}') {
+      inModel = false;
+      // Format the model fields for alignment
+      const formatted = formatModelFields(modelLines);
+      finalLines.push(...formatted);
+      finalLines.push(line);
+      modelLines = [];
+    } else if (inModel) {
+      modelLines.push(line);
+    } else {
+      finalLines.push(line);
+    }
+  }
+  
+  return finalLines.join('\n');
+}
+
+function formatModelFields(modelLines: string[]): string[] {
+  if (modelLines.length <= 1) return modelLines;
+  
+  const [header, ...fieldLines] = modelLines;
+  const fields: Array<{line: string, name: string, type: string, attributes: string}> = [];
+  const nonFields: string[] = [];
+  
+  // Parse field lines
+  for (const line of fieldLines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('@@')) {
+      nonFields.push(line);
+      continue;
+    }
+    
+    // Parse field: fieldName Type @attributes
+    const parts = trimmed.split(/\s+/);
+    if (parts.length >= 2) {
+      const name = parts[0];
+      const type = parts[1];
+      const attributes = parts.slice(2).join(' ');
+      fields.push({ line, name, type, attributes });
+    } else {
+      nonFields.push(line);
+    }
+  }
+  
+  if (fields.length === 0) {
+    return modelLines;
+  }
+  
+  // Calculate max widths for alignment
+  const maxNameWidth = Math.max(...fields.map(f => f.name.length));
+  const maxTypeWidth = Math.max(...fields.map(f => f.type.length));
+  
+  // Format fields with alignment
+  const formattedFields = fields.map(field => {
+    const padding = '  '; // Base indentation
+    const name = field.name.padEnd(maxNameWidth);
+    const type = field.type.padEnd(maxTypeWidth);
+    const attributes = field.attributes ? ` ${field.attributes}` : '';
+    return `${padding}${name} ${type}${attributes}`;
+  });
+  
+  return [header, ...formattedFields, ...nonFields];
+}
 
 export async function POST(request: NextRequest) {
   console.log('Format schema API called');
@@ -20,119 +121,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create a temporary file
-    const tempId = randomBytes(16).toString('hex');
-    const tempFile = join(tmpdir(), `prisma-schema-${tempId}.prisma`);
-    console.log('Temp file path:', tempFile);
+    // Use simple custom formatter that works in any environment
+    const formattedSchema = formatPrismaSchema(schema);
+    console.log('Formatted schema length:', formattedSchema.length);
 
-    try {
-      // Write schema to temp file
-      await fs.writeFile(tempFile, schema, 'utf8');
-      console.log('Schema written to temp file');
-
-      // Debug: List available files
-      console.log('Current working directory:', process.cwd());
-      try {
-        const nodeModules = await fs.readdir(join(process.cwd(), 'node_modules'));
-        console.log('Available packages in node_modules:', nodeModules.slice(0, 10));
-        
-        if (nodeModules.includes('prisma')) {
-          const prismaDir = await fs.readdir(join(process.cwd(), 'node_modules', 'prisma'));
-          console.log('Contents of prisma package:', prismaDir);
-        }
-      } catch (e) {
-        console.log('Could not read node_modules:', e);
-      }
-
-      // Try different possible paths for Prisma binary
-      const possiblePrismaPaths = [
-        join(process.cwd(), 'node_modules', '.bin', 'prisma'),
-        join(process.cwd(), 'node_modules', 'prisma', 'build', 'index.js'),
-        'npx prisma', // Use npx as fallback
-        'prisma'
-      ];
-      
-      let prismaPath = null;
-      
-      // Check which path exists
-      for (const path of possiblePrismaPaths) {
-        try {
-          if (path.startsWith('npx') || path === 'prisma') {
-            // For npx and global commands, we can't check file existence
-            prismaPath = path;
-            console.log('Will try command:', path);
-            break;
-          } else {
-            await fs.access(path);
-            prismaPath = path;
-            console.log('Found Prisma at:', path);
-            break;
-          }
-        } catch {
-          console.log('Prisma not found at:', path);
-        }
-      }
-      
-      if (!prismaPath) {
-        prismaPath = 'npx prisma'; // Last resort fallback
-        console.log('Using fallback command:', prismaPath);
-      }
-      
-      const formattedSchema = await new Promise<string>((resolve, reject) => {
-        let command;
-        if (prismaPath.endsWith('.js')) {
-          command = `node "${prismaPath}" format --schema="${tempFile}"`;
-        } else if (prismaPath.startsWith('npx')) {
-          command = `${prismaPath} format --schema="${tempFile}"`;
-        } else {
-          command = `"${prismaPath}" format --schema="${tempFile}"`;
-        }
-        console.log('Executing command:', command);
-        
-        exec(
-          command,
-          { 
-            cwd: process.cwd(),
-            timeout: 15000, // 15 second timeout
-            env: { 
-              ...process.env,
-              FORCE_COLOR: '0',
-              NODE_ENV: 'production' // Prevent prisma from trying to install
-            }
-          },
-          async (error, stdout, stderr) => {
-            console.log('Command completed');
-            console.log('stdout:', stdout);
-            console.log('stderr:', stderr);
-            
-            if (error) {
-              console.error('Prisma format error:', error);
-              reject(error);
-              return;
-            }
-
-            try {
-              const formatted = await fs.readFile(tempFile, 'utf8');
-              console.log('Formatted schema length:', formatted.length);
-              resolve(formatted);
-            } catch (readError) {
-              console.error('Error reading formatted file:', readError);
-              reject(readError);
-            }
-          }
-        );
-      });
-
-      return NextResponse.json({ formattedSchema });
-    } finally {
-      // Clean up temp file
-      try {
-        await fs.unlink(tempFile);
-        console.log('Temp file cleaned up');
-      } catch (cleanupError) {
-        console.warn('Failed to clean up temp file:', cleanupError);
-      }
-    }
+    return NextResponse.json({ formattedSchema });
   } catch (error) {
     console.error('Format schema error:', error);
     return NextResponse.json(
