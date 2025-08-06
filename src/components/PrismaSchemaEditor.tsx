@@ -71,8 +71,13 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
 
-    // Register Prisma language with comprehensive syntax highlighting
-    monaco.languages.register({ id: 'prisma' });
+    // Check if Prisma language is already registered to prevent duplicates
+    const languages = monaco.languages.getLanguages();
+    const prismaLangExists = languages.some((lang: any) => lang.id === 'prisma');
+    
+    if (!prismaLangExists) {
+      // Register Prisma language with comprehensive syntax highlighting
+      monaco.languages.register({ id: 'prisma' });
 
     // Enhanced Prisma language definition
     monaco.languages.setMonarchTokensProvider('prisma', {
@@ -178,14 +183,17 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
         'editorIndentGuide.background': '#4a5568', // gray-700
         'editorIndentGuide.activeBackground': '#718096', // gray-600
         'editorRuler.foreground': '#4a5568', // gray-700
+        'editorGutter.border': 'transparent',
+        'editorOverviewRuler.border': 'transparent'
       }
     });
 
-    monaco.editor.setTheme('prisma-dark');
+      monaco.editor.setTheme('prisma-dark');
+    }
 
     // Enhanced completion provider for Prisma schema (like VSCode extension)
     const completionProvider = monaco.languages.registerCompletionItemProvider('prisma', {
-      triggerCharacters: ['@', '=', '"', ' ', '\n', '{'],
+      triggerCharacters: ['@', '=', '"'],
       provideCompletionItems: (model: any, position: any) => {
         const word = model.getWordUntilPosition(position);
         const range = {
@@ -369,14 +377,23 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
             { name: 'ignore', snippet: 'ignore', desc: 'Excludes field from client' }
           ];
 
+          // Create a special range that starts from after the @ symbol
+          const atPosition = beforeCursor.lastIndexOf('@');
+          const atRange = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: atPosition + 2, // Start after the @ symbol
+            endColumn: position.column
+          };
+
           suggestions.push(
             ...attributes.map(attr => ({
               label: `@${attr.name}`,
               kind: monaco.languages.CompletionItemKind.Property,
-              insertText: `@${attr.snippet}`,
+              insertText: attr.snippet,
               insertTextRules: attr.snippet.includes('$') ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
               documentation: attr.desc,
-              range,
+              range: atRange,
               sortText: '1'
             }))
           );
@@ -725,7 +742,14 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
 
 
         {lastPush && (
-          <div className="mt-4 flex flex-col items-center">
+          <div className="mt-4 flex flex-col items-center relative">
+            <button 
+              onClick={() => setLastPush(null)}
+              className="absolute -top-1 -right-1 w-4 h-4 bg-gray-600 hover:bg-gray-500 rounded-full flex items-center justify-center text-gray-300 hover:text-white text-xs"
+              title="Dismiss"
+            >
+              ×
+            </button>
             <Badge variant="secondary" className="text-xs rotate-90 whitespace-nowrap bg-gray-700 text-gray-300">
               Last push
             </Badge>
@@ -755,7 +779,7 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
               wordWrap: 'on',
               automaticLayout: true,
               scrollBeyondLastLine: false,
-              padding: { top: 16, bottom: 16 },
+              padding: { top: 16, bottom: 100 },
               renderWhitespace: 'selection',
               bracketPairColorization: { enabled: true },
               guides: {
@@ -778,12 +802,8 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
                 filterGraceful: true,
                 localityBonus: true,
               },
-              quickSuggestions: {
-                other: 'inline',
-                comments: false,
-                strings: false,
-              },
-              quickSuggestionsDelay: 300,
+              quickSuggestions: false,
+              quickSuggestionsDelay: 500,
               parameterHints: { 
                 enabled: true,
                 cycle: true
@@ -792,7 +812,7 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
               autoClosingQuotes: 'always',
               autoIndent: 'full',
               acceptSuggestionOnCommitCharacter: true,
-              acceptSuggestionOnEnter: 'smart',
+              acceptSuggestionOnEnter: 'off',
               tabCompletion: 'on',
               wordBasedSuggestions: 'allDocuments',
               folding: true,
