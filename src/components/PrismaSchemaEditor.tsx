@@ -431,13 +431,27 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
                 { label: '"prisma-client-py"', kind: monaco.languages.CompletionItemKind.Value, insertText: '"prisma-client-py"', range }
               );
             } else if (beforeCursor.includes('previewFeatures')) {
-              const features = ['relationJoins', 'fullTextSearch', 'postgresqlExtensions', 'views', 'multiSchema'];
+              const features = [
+                'relationJoins',
+                'fullTextSearch', 
+                'fullTextIndex',
+                'postgresqlExtensions',
+                'views', 
+                'multiSchema',
+                'fieldReference',
+                'clientExtensions',
+                'jsonProtocol',
+                'metrics',
+                'tracing',
+                'filteredRelationCount'
+              ];
               suggestions.push(
                 ...features.map(feature => ({
                   label: `"${feature}"`,
                   kind: monaco.languages.CompletionItemKind.Value,
                   insertText: `"${feature}"`,
-                  range
+                  range,
+                  documentation: `Enable ${feature} preview feature`
                 }))
               );
             }
@@ -607,6 +621,72 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
         handleFormat();
       }
     });
+
+    // Add Ctrl+Space for manual suggestions
+    editor.addAction({
+      id: 'prisma.triggerSuggest',
+      label: 'Trigger Suggestions',
+      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space],
+      run: () => {
+        editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
+      }
+    });
+
+    // Add basic schema validation
+    const validateSchema = (model: any) => {
+      const content = model.getValue();
+      const lines = content.split('\n');
+      const markers: any[] = [];
+
+      lines.forEach((line, index) => {
+        const lineNumber = index + 1;
+        const trimmed = line.trim();
+
+        // Check for common errors
+        if (trimmed.includes('@') && !trimmed.match(/@(id|unique|default|relation|updatedAt|map|db|ignore)\b/)) {
+          const atIndex = trimmed.indexOf('@');
+          const attrName = trimmed.substring(atIndex + 1).split(/\s|\(|\)/)[0];
+          if (attrName && !attrName.match(/^(id|unique|default|relation|updatedAt|map|db|ignore)$/)) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              startLineNumber: lineNumber,
+              startColumn: line.indexOf('@') + 1,
+              endLineNumber: lineNumber,
+              endColumn: line.indexOf('@') + attrName.length + 2,
+              message: `Unknown attribute: @${attrName}`
+            });
+          }
+        }
+
+        // Check for missing field types in models
+        if (trimmed.match(/^\s+[a-zA-Z_][a-zA-Z0-9_]*\s*$/) && !trimmed.includes('@')) {
+          markers.push({
+            severity: monaco.MarkerSeverity.Warning,
+            startLineNumber: lineNumber,
+            startColumn: 1,
+            endLineNumber: lineNumber,
+            endColumn: line.length + 1,
+            message: 'Field is missing a type'
+          });
+        }
+      });
+
+      monaco.editor.setModelMarkers(model, 'prisma', markers);
+    };
+
+    // Validate on content change
+    editor.onDidChangeModelContent(() => {
+      const model = editor.getModel();
+      if (model) {
+        validateSchema(model);
+      }
+    });
+
+    // Initial validation
+    const model = editor.getModel();
+    if (model) {
+      validateSchema(model);
+    }
   };
 
   const handleFormat = async () => {
