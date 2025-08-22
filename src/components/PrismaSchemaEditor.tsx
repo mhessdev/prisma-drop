@@ -30,6 +30,7 @@ interface PrismaSchemaEditorProps {
 
 const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
   const editorRef = useRef<any>(null);
+  const completionProviderRef = useRef<any>(null);
   const [isFormatting, setIsFormatting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [lastPush, setLastPush] = useState<Date | null>(null);
@@ -168,8 +169,8 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
       colors: {
         'editor.background': '#1a202c', // gray-900
         'editor.foreground': '#e2e8f0', // gray-300
-        'editorLineNumber.foreground': '#718096', // gray-600
-        'editorLineNumber.activeForeground': '#e2e8f0', // gray-300
+        'editorLineNumber.foreground': '#4a5568', // gray-700 - muted line numbers
+        'editorLineNumber.activeForeground': '#a0aec0', // gray-500 - subtle active line number
         'editor.selectionBackground': '#2d3748', // gray-800
         'editor.selectionHighlightBackground': '#4a5568', // gray-700
         'editor.wordHighlightBackground': '#4a5568', // gray-700
@@ -178,13 +179,29 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
         'editorBracketMatch.background': '#2d374850',
         'editorBracketMatch.border': '#5a67d8', // indigo-600
         'editor.lineHighlightBackground': '#2d3748', // gray-800
-        'editorGutter.background': '#1a202c', // gray-900
+        'editorGutter.background': '#1a202c', // gray-900 - same as editor background
         'editorWhitespace.foreground': '#4a5568', // gray-700
         'editorIndentGuide.background': '#4a5568', // gray-700
         'editorIndentGuide.activeBackground': '#718096', // gray-600
         'editorRuler.foreground': '#4a5568', // gray-700
-        'editorGutter.border': 'transparent',
-        'editorOverviewRuler.border': 'transparent'
+        'editorGutter.border': 'transparent', // remove border
+        'editorOverviewRuler.border': 'transparent',
+        'editorWidget.background': '#2d3748', // gray-800 - suggestion widget
+        'editorWidget.border': '#4a5568', // gray-700
+        'editorSuggestWidget.background': '#2d3748', // gray-800
+        'editorSuggestWidget.border': '#4a5568', // gray-700
+        'editorSuggestWidget.foreground': '#e2e8f0', // gray-300
+        'editorSuggestWidget.selectedBackground': '#4a5568', // gray-700
+        'editorSuggestWidget.highlightForeground': '#7f9cf5', // indigo-400
+        'editorHoverWidget.background': '#2d3748', // gray-800
+        'editorHoverWidget.border': '#4a5568', // gray-700
+        'list.activeSelectionBackground': '#4a5568', // gray-700
+        'list.focusBackground': '#4a5568', // gray-700
+        'list.hoverBackground': '#374151', // gray-700 with transparency
+        'list.inactiveSelectionBackground': '#374151', // gray-700 with transparency
+        'scrollbarSlider.background': '#4a556850', // gray-700 with transparency
+        'scrollbarSlider.hoverBackground': '#718096', // gray-600
+        'scrollbarSlider.activeBackground': '#a0aec0' // gray-500
       }
     });
 
@@ -192,8 +209,12 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
     }
 
     // Enhanced completion provider for Prisma schema (like VSCode extension)
-    const completionProvider = monaco.languages.registerCompletionItemProvider('prisma', {
-      triggerCharacters: ['@', '=', '"'],
+    if (completionProviderRef.current) {
+      completionProviderRef.current.dispose();
+    }
+    
+    completionProviderRef.current = monaco.languages.registerCompletionItemProvider('prisma', {
+      triggerCharacters: ['@', '=', '"', ' ', '\n', '{', 'm', 'g', 'd', 'e'],
       provideCompletionItems: (model: any, position: any) => {
         const word = model.getWordUntilPosition(position);
         const range = {
@@ -224,11 +245,28 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
 
         let suggestions: any[] = [];
 
+        // Check for existing blocks to avoid duplicates
+        const existingBlocks = {
+          generator: /generator\s+\w+/.test(allText),
+          datasource: /datasource\s+\w+/.test(allText),
+          model: false, // Models can be multiple
+          enum: false  // Enums can be multiple
+        };
+
+        // Get existing model names to avoid duplicates
+        const existingModels = new Set();
+        const modelMatches = allText.matchAll(/model\s+(\w+)/g);
+        for (const match of modelMatches) {
+          existingModels.add(match[1]);
+        }
+
         // Top-level block suggestions
         if (!isInGenerator && !isInDatasource && !isInModel && !isInEnum) {
           if (isNewLine || /^\s*(gen|mod|dat|enu|typ|vie)/.test(line)) {
-            suggestions.push(
-              {
+            const availableSuggestions = [];
+
+            if (!existingBlocks.generator) {
+              availableSuggestions.push({
                 label: 'generator',
                 kind: monaco.languages.CompletionItemKind.Class,
                 insertText: [
@@ -241,24 +279,36 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
                 documentation: 'Define a code generator',
                 range,
                 sortText: '1'
-              },
-              {
-                label: 'model',
-                kind: monaco.languages.CompletionItemKind.Class,
-                insertText: [
-                  'model ${1:User} {',
-                  '  id    Int     @id @default(autoincrement())',
-                  '  email String  @unique',
-                  '  name  String?',
-                  '  $0',
-                  '}'
-                ].join('\n'),
-                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: 'Define a data model',
-                range,
-                sortText: '2'
-              },
-              {
+              });
+            }
+
+            // Generate a unique model name suggestion
+            let modelCounter = 1;
+            let suggestedModelName = 'User';
+            while (existingModels.has(suggestedModelName)) {
+              modelCounter++;
+              suggestedModelName = `Model${modelCounter}`;
+            }
+
+            availableSuggestions.push({
+              label: 'model',
+              kind: monaco.languages.CompletionItemKind.Class,
+              insertText: [
+                `model \${1:${suggestedModelName}} {`,
+                '  id    Int     @id @default(autoincrement())',
+                '  email String  @unique',
+                '  name  String?',
+                '  $0',
+                '}'
+              ].join('\n'),
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              documentation: 'Define a data model',
+              range,
+              sortText: '2'
+            });
+
+            if (!existingBlocks.datasource) {
+              availableSuggestions.push({
                 label: 'datasource',
                 kind: monaco.languages.CompletionItemKind.Module,
                 insertText: [
@@ -272,23 +322,26 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
                 documentation: 'Define a datasource',
                 range,
                 sortText: '3'
-              },
-              {
-                label: 'enum',
-                kind: monaco.languages.CompletionItemKind.Enum,
-                insertText: [
-                  'enum ${1:Role} {',
-                  '  ${2:USER}',
-                  '  ${3:ADMIN}',
-                  '  $0',
-                  '}'
-                ].join('\n'),
-                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: 'Define an enumeration',
-                range,
-                sortText: '4'
-              }
-            );
+              });
+            }
+
+            availableSuggestions.push({
+              label: 'enum',
+              kind: monaco.languages.CompletionItemKind.Enum,
+              insertText: [
+                'enum ${1:Role} {',
+                '  ${2:USER}',
+                '  ${3:ADMIN}',
+                '  $0',
+                '}'
+              ].join('\n'),
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              documentation: 'Define an enumeration',
+              range,
+              sortText: '4'
+            });
+
+            suggestions.push(...availableSuggestions);
           }
         }
 
@@ -377,26 +430,60 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
             { name: 'ignore', snippet: 'ignore', desc: 'Excludes field from client' }
           ];
 
-          // Create a special range that starts from after the @ symbol
-          const atPosition = beforeCursor.lastIndexOf('@');
-          const atRange = {
-            startLineNumber: position.lineNumber,
-            endLineNumber: position.lineNumber,
-            startColumn: atPosition + 2, // Start after the @ symbol
-            endColumn: position.column
-          };
+          // Block attributes (@@)
+          const blockAttributes = [
+            { name: 'id', snippet: 'id([${1:field1}, ${2:field2}])', desc: 'Defines a multi-field ID on the model' },
+            { name: 'unique', snippet: 'unique([${1:field1}, ${2:field2}])', desc: 'Defines a multi-field unique constraint' },
+            { name: 'index', snippet: 'index([${1:field1}, ${2:field2}])', desc: 'Defines an index' },
+            { name: 'map', snippet: 'map("${1:table_name}")', desc: 'Maps to database table name' },
+            { name: 'schema', snippet: 'schema("${1:schema_name}")', desc: 'Defines the database schema' }
+          ];
 
-          suggestions.push(
-            ...attributes.map(attr => ({
-              label: `@${attr.name}`,
-              kind: monaco.languages.CompletionItemKind.Property,
-              insertText: attr.snippet,
-              insertTextRules: attr.snippet.includes('$') ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
-              documentation: attr.desc,
-              range: atRange,
-              sortText: '1'
-            }))
-          );
+          // Check if we have @@ (two @ symbols)
+          const doubleAtMatch = beforeCursor.match(/@@([a-zA-Z_]*)$/);
+          const singleAtMatch = beforeCursor.match(/@([a-zA-Z_]*)$/);
+          
+          if (doubleAtMatch) {
+            // Handle @@ block attributes
+            const atRange = {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: position.column - doubleAtMatch[1].length,
+              endColumn: position.column
+            };
+
+            suggestions.push(
+              ...blockAttributes.map(attr => ({
+                label: `@@${attr.name}`,
+                kind: monaco.languages.CompletionItemKind.Property,
+                insertText: attr.snippet,
+                insertTextRules: attr.snippet.includes('$') ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
+                documentation: attr.desc,
+                range: atRange,
+                sortText: '1'
+              }))
+            );
+          } else if (singleAtMatch) {
+            // Handle @ field attributes
+            const atRange = {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: position.column - singleAtMatch[1].length,
+              endColumn: position.column
+            };
+
+            suggestions.push(
+              ...attributes.map(attr => ({
+                label: `@${attr.name}`,
+                kind: monaco.languages.CompletionItemKind.Property,
+                insertText: attr.snippet,
+                insertTextRules: attr.snippet.includes('$') ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet : undefined,
+                documentation: attr.desc,
+                range: atRange,
+                sortText: '1'
+              }))
+            );
+          }
         }
 
         // Default value functions inside @default()
@@ -443,7 +530,13 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
                 'jsonProtocol',
                 'metrics',
                 'tracing',
-                'filteredRelationCount'
+                'filteredRelationCount',
+                'driverAdapters',
+                'typedSql',
+                'nativeDistinct',
+                'extendedWhereUnique',
+                'omitApi',
+                'prismaSchemaFolder'
               ];
               suggestions.push(
                 ...features.map(feature => ({
@@ -455,6 +548,39 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
                 }))
               );
             }
+          } else if (beforeCursor.trim().endsWith('previewFeatures = [') || 
+                    beforeCursor.includes('previewFeatures = []') ||
+                    (beforeCursor.includes('previewFeatures = [') && !beforeCursor.includes(']'))) {
+            // Handle empty preview features array and arrays in progress
+            const features = [
+              'relationJoins',
+              'fullTextSearch', 
+              'fullTextIndex',
+              'postgresqlExtensions',
+              'views', 
+              'multiSchema',
+              'fieldReference',
+              'clientExtensions',
+              'jsonProtocol',
+              'metrics',
+              'tracing',
+              'filteredRelationCount',
+              'driverAdapters',
+              'typedSql',
+              'nativeDistinct',
+              'extendedWhereUnique',
+              'omitApi',
+              'prismaSchemaFolder'
+            ];
+            suggestions.push(
+              ...features.map(feature => ({
+                label: `"${feature}"`,
+                kind: monaco.languages.CompletionItemKind.Value,
+                insertText: `"${feature}"`,
+                range,
+                documentation: `Enable ${feature} preview feature`
+              }))
+            );
           } else {
             const generatorProps = [
               { name: 'provider', snippet: 'provider = "${1:prisma-client-js}"' },
@@ -520,7 +646,12 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
           });
         }
 
-        return { suggestions };
+        // Remove duplicates based on label
+        const uniqueSuggestions = suggestions.filter((suggestion, index, self) => 
+          index === self.findIndex(s => s.label === suggestion.label)
+        );
+
+        return { suggestions: uniqueSuggestions };
       }
     });
 
@@ -632,42 +763,193 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
       }
     });
 
-    // Add basic schema validation
+    // Enhanced schema validation
     const validateSchema = (model: any) => {
       const content = model.getValue();
       const lines = content.split('\n');
       const markers: any[] = [];
 
+      // Known Prisma attributes
+      const fieldAttributes = ['id', 'unique', 'default', 'relation', 'updatedAt', 'map', 'db', 'ignore', 'createdAt'];
+      const blockAttributes = ['id', 'unique', 'index', 'map', 'schema', 'fulltext'];
+      const validDataTypes = ['String', 'Boolean', 'Int', 'BigInt', 'Float', 'Decimal', 'DateTime', 'Json', 'Bytes', 'Unsupported'];
+      const validBlocks = ['model', 'generator', 'datasource', 'enum', 'type', 'view'];
+      const validGeneratorProperties = ['provider', 'output', 'previewFeatures', 'binaryTargets'];
+      const validDatasourceProperties = ['provider', 'url', 'directUrl', 'shadowDatabaseUrl', 'relationMode'];
+
+      let currentBlock = '';
+      let braceCount = 0;
+      const usedModels = new Set();
+      const definedModels = new Set();
+
       lines.forEach((line, index) => {
         const lineNumber = index + 1;
         const trimmed = line.trim();
 
-        // Check for common errors
-        if (trimmed.includes('@') && !trimmed.match(/@(id|unique|default|relation|updatedAt|map|db|ignore)\b/)) {
-          const atIndex = trimmed.indexOf('@');
-          const attrName = trimmed.substring(atIndex + 1).split(/\s|\(|\)/)[0];
-          if (attrName && !attrName.match(/^(id|unique|default|relation|updatedAt|map|db|ignore)$/)) {
+        // Skip comments and empty lines
+        if (!trimmed || trimmed.startsWith('//')) return;
+
+        // Track block context
+        if (validBlocks.some(block => trimmed.startsWith(block + ' '))) {
+          currentBlock = trimmed.split(' ')[0];
+          braceCount = 0;
+          
+          // Track model definitions
+          if (currentBlock === 'model') {
+            const modelName = trimmed.split(' ')[1]?.replace('{', '');
+            if (modelName) definedModels.add(modelName);
+          }
+        }
+
+        if (trimmed.includes('{')) braceCount++;
+        if (trimmed.includes('}')) {
+          braceCount--;
+          if (braceCount === 0) currentBlock = '';
+        }
+
+        // Validate field attributes
+        const fieldAttrMatches = trimmed.matchAll(/@([a-zA-Z_][a-zA-Z0-9_]*)/g);
+        for (const match of fieldAttrMatches) {
+          const attrName = match[1];
+          if (!fieldAttributes.includes(attrName)) {
+            const atIndex = line.indexOf('@' + attrName);
             markers.push({
               severity: monaco.MarkerSeverity.Error,
               startLineNumber: lineNumber,
-              startColumn: line.indexOf('@') + 1,
+              startColumn: atIndex + 1,
               endLineNumber: lineNumber,
-              endColumn: line.indexOf('@') + attrName.length + 2,
-              message: `Unknown attribute: @${attrName}`
+              endColumn: atIndex + attrName.length + 2,
+              message: `Unknown field attribute: @${attrName}. Valid attributes: ${fieldAttributes.join(', ')}`
             });
           }
         }
 
-        // Check for missing field types in models
-        if (trimmed.match(/^\s+[a-zA-Z_][a-zA-Z0-9_]*\s*$/) && !trimmed.includes('@')) {
-          markers.push({
-            severity: monaco.MarkerSeverity.Warning,
-            startLineNumber: lineNumber,
-            startColumn: 1,
-            endLineNumber: lineNumber,
-            endColumn: line.length + 1,
-            message: 'Field is missing a type'
-          });
+        // Validate block attributes
+        const blockAttrMatches = trimmed.matchAll(/@@([a-zA-Z_][a-zA-Z0-9_]*)/g);
+        for (const match of blockAttrMatches) {
+          const attrName = match[1];
+          if (!blockAttributes.includes(attrName)) {
+            const atIndex = line.indexOf('@@' + attrName);
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              startLineNumber: lineNumber,
+              startColumn: atIndex + 1,
+              endLineNumber: lineNumber,
+              endColumn: atIndex + attrName.length + 3,
+              message: `Unknown block attribute: @@${attrName}. Valid attributes: ${blockAttributes.join(', ')}`
+            });
+          }
+        }
+
+        // Validate field definitions in models
+        if (currentBlock === 'model' && braceCount > 0) {
+          const fieldMatch = trimmed.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+([a-zA-Z_][a-zA-Z0-9_\[\]?]*)/);
+          if (fieldMatch) {
+            const [, fieldName, fieldType] = fieldMatch;
+            
+            // Clean the field type (remove [] and ?)
+            const baseType = fieldType.replace(/[\[\]?]/g, '');
+            
+            // Check if it's a valid primitive type or a model reference
+            if (!validDataTypes.includes(baseType) && !definedModels.has(baseType)) {
+              // Track as potential model reference for later validation
+              usedModels.add(baseType);
+            }
+          }
+
+          // Check for fields without types
+          if (trimmed.match(/^\s+[a-zA-Z_][a-zA-Z0-9_]*\s*$/) && !trimmed.includes('@')) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              startLineNumber: lineNumber,
+              startColumn: 1,
+              endLineNumber: lineNumber,
+              endColumn: line.length + 1,
+              message: 'Field is missing a type declaration'
+            });
+          }
+        }
+
+        // Validate generator properties
+        if (currentBlock === 'generator' && braceCount > 0) {
+          const propMatch = trimmed.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
+          if (propMatch) {
+            const propName = propMatch[1];
+            if (!validGeneratorProperties.includes(propName)) {
+              markers.push({
+                severity: monaco.MarkerSeverity.Warning,
+                startLineNumber: lineNumber,
+                startColumn: 1,
+                endLineNumber: lineNumber,
+                endColumn: propName.length + 1,
+                message: `Unknown generator property: ${propName}. Valid properties: ${validGeneratorProperties.join(', ')}`
+              });
+            }
+          }
+        }
+
+        // Validate datasource properties
+        if (currentBlock === 'datasource' && braceCount > 0) {
+          const propMatch = trimmed.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=/);
+          if (propMatch) {
+            const propName = propMatch[1];
+            if (!validDatasourceProperties.includes(propName)) {
+              markers.push({
+                severity: monaco.MarkerSeverity.Warning,
+                startLineNumber: lineNumber,
+                startColumn: 1,
+                endLineNumber: lineNumber,
+                endColumn: propName.length + 1,
+                message: `Unknown datasource property: ${propName}. Valid properties: ${validDatasourceProperties.join(', ')}`
+              });
+            }
+          }
+        }
+
+        // Check for syntax errors
+        if (trimmed.includes('{') && !trimmed.includes('}')) {
+          // Opening brace should be at end of line or have content after
+          if (trimmed.endsWith('{') || trimmed.match(/{\s*$/)) {
+            // Valid
+          } else if (!trimmed.match(/{\s*[^}]+\s*$/)) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Warning,
+              startLineNumber: lineNumber,
+              startColumn: 1,
+              endLineNumber: lineNumber,
+              endColumn: line.length + 1,
+              message: 'Consider placing opening brace at end of line for better formatting'
+            });
+          }
+        }
+
+        // Check for missing required datasource fields
+        if (currentBlock === 'datasource' && trimmed.includes('}')) {
+          const datasourceContent = lines.slice(
+            lines.findIndex(l => l.trim().startsWith('datasource')),
+            index + 1
+          ).join('\n');
+          
+          if (!datasourceContent.includes('provider')) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              startLineNumber: lineNumber,
+              startColumn: 1,
+              endLineNumber: lineNumber,
+              endColumn: 2,
+              message: 'Datasource is missing required "provider" field'
+            });
+          }
+          if (!datasourceContent.includes('url')) {
+            markers.push({
+              severity: monaco.MarkerSeverity.Error,
+              startLineNumber: lineNumber,
+              startColumn: 1,
+              endLineNumber: lineNumber,
+              endColumn: 2,
+              message: 'Datasource is missing required "url" field'
+            });
+          }
         }
       });
 
@@ -708,8 +990,26 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
 
       if (response.ok) {
         const { formattedSchema } = await response.json();
-        editorRef.current.setValue(formattedSchema);
-        onChange(formattedSchema);
+        
+        // Additional cleanup: remove excessive empty lines
+        const cleanedSchema = formattedSchema
+          .split('\n')
+          .reduce((acc: string[], line: string, index: number, array: string[]) => {
+            // If current line is empty
+            if (line.trim() === '') {
+              // Only add if previous line wasn't empty or if it's the first line
+              if (index === 0 || array[index - 1].trim() !== '') {
+                acc.push(line);
+              }
+            } else {
+              acc.push(line);
+            }
+            return acc;
+          }, [])
+          .join('\n');
+        
+        editorRef.current.setValue(cleanedSchema);
+        onChange(cleanedSchema);
         
         // Show success toast
         toast({
@@ -717,8 +1017,50 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
           description: "Your schema has been formatted using Prisma's official formatter",
         });
       } else {
-        // Fallback to Monaco's document formatting
-        await editorRef.current.trigger('format', 'editor.action.formatDocument', {});
+        // Enhanced fallback formatting with empty line removal
+        const model = editorRef.current.getModel();
+        if (model) {
+          const value = model.getValue();
+          const formatted = value
+            .split('\n')
+            .map((line: string) => {
+              // Remove trailing whitespace
+              line = line.trimEnd();
+              
+              // Handle indentation for model contents
+              if (line.trim().match(/^(id|email|name|title|content|published|author|authorId|createdAt|updatedAt|provider|url)\s+/)) {
+                const trimmed = line.trim();
+                return `  ${trimmed}`;
+              }
+              
+              // Block-level keywords should not be indented
+              if (line.trim().match(/^(model|generator|datasource|enum)\s+/)) {
+                return line.trim();
+              }
+              
+              // Closing braces should not be indented
+              if (line.trim() === '}') {
+                return '}';
+              }
+              
+              return line;
+            })
+            .reduce((acc: string[], line: string, index: number, array: string[]) => {
+              // Remove excessive empty lines
+              if (line.trim() === '') {
+                if (index === 0 || array[index - 1].trim() !== '') {
+                  acc.push(line);
+                }
+              } else {
+                acc.push(line);
+              }
+              return acc;
+            }, [])
+            .join('\n');
+
+          editorRef.current.setValue(formatted);
+          onChange(formatted);
+        }
         
         // Show fallback warning
         toast({
@@ -729,9 +1071,29 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
     } catch (error) {
       console.error('Error formatting:', error);
       
-      // Fallback to Monaco's document formatting
+      // Enhanced fallback to Monaco's document formatting
       try {
-        await editorRef.current.trigger('format', 'editor.action.formatDocument', {});
+        const model = editorRef.current.getModel();
+        if (model) {
+          const value = model.getValue();
+          const formatted = value
+            .split('\n')
+            .reduce((acc: string[], line: string, index: number, array: string[]) => {
+              // Remove excessive empty lines
+              if (line.trim() === '') {
+                if (index === 0 || array[index - 1].trim() !== '') {
+                  acc.push(line);
+                }
+              } else {
+                acc.push(line);
+              }
+              return acc;
+            }, [])
+            .join('\n');
+
+          editorRef.current.setValue(formatted);
+          onChange(formatted);
+        }
         
         // Show fallback warning
         toast({
@@ -819,8 +1181,6 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
           <span className="text-xs mt-1">{isFormatting ? "..." : "Format"}</span>
         </Button>
 
-
-
         {lastPush && (
           <div className="mt-4 flex flex-col items-center relative">
             <button 
@@ -830,7 +1190,14 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
             >
               ×
             </button>
-            <Badge variant="secondary" className="text-xs rotate-90 whitespace-nowrap bg-gray-700 text-gray-300">
+            <Badge 
+              variant="secondary" 
+              className="text-xs rotate-90 whitespace-nowrap bg-gray-700 text-gray-300"
+              onMouseLeave={() => {
+                // Auto-dismiss tooltip after 3 seconds
+                setTimeout(() => setLastPush(null), 3000);
+              }}
+            >
               Last push
             </Badge>
             <span className="text-xs text-gray-400 mt-2 transform rotate-90 whitespace-nowrap">
@@ -856,10 +1223,11 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
               fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace",
               fontLigatures: true,
               lineNumbers: 'on',
+              lineNumbersMinChars: 3,
               wordWrap: 'on',
               automaticLayout: true,
-              scrollBeyondLastLine: false,
-              padding: { top: 16, bottom: 100 },
+              scrollBeyondLastLine: true,
+              padding: { top: 16, bottom: 200 },
               renderWhitespace: 'selection',
               bracketPairColorization: { enabled: true },
               guides: {
@@ -881,9 +1249,19 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
                 snippetsPreventQuickSuggestions: false,
                 filterGraceful: true,
                 localityBonus: true,
+                insertMode: 'replace',
+                showIcons: true,
+                showStatusBar: true,
+                preview: true,
+                previewMode: 'prefix',
+                showInlineDetails: true,
               },
-              quickSuggestions: false,
-              quickSuggestionsDelay: 500,
+              quickSuggestions: {
+                other: true,
+                comments: false,
+                strings: false
+              },
+              quickSuggestionsDelay: 300,
               parameterHints: { 
                 enabled: true,
                 cycle: true
@@ -891,10 +1269,11 @@ const PrismaSchemaEditor = ({ value, onChange }: PrismaSchemaEditorProps) => {
               autoClosingBrackets: 'always',
               autoClosingQuotes: 'always',
               autoIndent: 'full',
-              acceptSuggestionOnCommitCharacter: true,
+              acceptSuggestionOnCommitCharacter: false,
               acceptSuggestionOnEnter: 'off',
               tabCompletion: 'on',
-              wordBasedSuggestions: 'allDocuments',
+              wordBasedSuggestions: 'currentDocument',
+              suggestOnTriggerCharacters: true,
               folding: true,
               foldingStrategy: 'indentation',
               showFoldingControls: 'always',

@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Github, User, Copy, Check } from "lucide-react";
+import { Github, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Toaster } from "@/components/ui/toaster";
@@ -12,12 +9,10 @@ import TabContent from "./TabContent";
 const Home = () => {
   const [connectionString, setConnectionString] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("schema");
+  const [activeTab, setActiveTab] = useState("database");
   const [databaseId, setDatabaseId] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(24); // hours
-  const [connectionType, setConnectionType] = useState<"prisma" | "direct">("prisma");
-  const [copied, setCopied] = useState(false);
   const [schemaContent, setSchemaContent] = useState<string>(
     `// This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
@@ -86,10 +81,6 @@ model Post {
     }
   }, [loading, timeRemaining]);
 
-  const handleTabChange = (value) => {
-    setActiveTab(value);
-  };
-
   const handleLogin = () => {
     setIsAuthenticated(true);
   };
@@ -98,33 +89,6 @@ model Post {
     // Simulate claiming the database
     alert("Database claimed successfully! It will no longer expire.");
     setTimeRemaining(null); // Remove expiration
-  };
-
-  const handleCopyConnectionString = async () => {
-    try {
-      await navigator.clipboard.writeText(getConnectionString());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error("Failed to copy connection string:", error);
-    }
-  };
-
-  const getConnectionString = () => {
-    if (connectionType === "prisma") {
-      return connectionString;
-    } else {
-      // Direct connection string (same for now, but could be different)
-      return connectionString;
-    }
-  };
-
-  const getConnectionInstructions = () => {
-    if (connectionType === "prisma") {
-      return "Add this to your .env file as DATABASE_URL for use with Prisma ORM";
-    } else {
-      return "Use this connection string directly with your PostgreSQL client";
-    }
   };
 
   return (
@@ -193,84 +157,15 @@ model Post {
             </p>
           </div>
         ) : (
-          <>
-            <Card className="mb-4 bg-gray-900 border-gray-800 flex-shrink-0">
-              <CardContent className="p-4">
-                <div className="flex flex-col space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-medium text-white">Database Connection</h2>
-                  </div>
-                  
-                  {/* Connection Type Tabs */}
-                  <Tabs value={connectionType} onValueChange={(value) => setConnectionType(value as "prisma" | "direct")}>
-                    <TabsList className="grid w-80 grid-cols-2">
-                      <TabsTrigger value="prisma" className="text-sm">With Prisma ORM</TabsTrigger>
-                      <TabsTrigger value="direct" className="text-sm">Direct Connection</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="prisma" className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <div className="bg-gray-800 p-2 rounded-md font-mono text-sm overflow-x-auto flex-1 text-gray-300 border border-gray-700">
-                          {getConnectionString()}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleCopyConnectionString}
-                          className="shrink-0 border-gray-600 text-gray-300 hover:bg-gray-800"
-                        >
-                          {copied ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                      <p className="text-sm text-gray-400">
-                        {getConnectionInstructions()}
-                      </p>
-                    </TabsContent>
-                    
-                    <TabsContent value="direct" className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <div className="bg-gray-800 p-2 rounded-md font-mono text-sm overflow-x-auto flex-1 text-gray-300 border border-gray-700">
-                          {getConnectionString()}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleCopyConnectionString}
-                          className="shrink-0 border-gray-600 text-gray-300 hover:bg-gray-800"
-                        >
-                          {copied ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                      <p className="text-sm text-gray-400">
-                        {getConnectionInstructions()}
-                      </p>
-                    </TabsContent>
-                  </Tabs>
-                  
-                  <p className="text-sm text-gray-400">
-                    This database will be automatically deleted after 24 hours
-                    unless claimed.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex-1 min-h-0">
-              <TabContent
-                activeTab={activeTab}
-                schemaContent={schemaContent}
-                onSchemaChange={setSchemaContent}
-              />
-            </div>
-          </>
+          <div className="flex-1 min-h-0">
+            <TabContent
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              schemaContent={schemaContent}
+              onSchemaChange={setSchemaContent}
+              connectionString={connectionString}
+            />
+          </div>
         )}
       </main>
       <Toaster />
